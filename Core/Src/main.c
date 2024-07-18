@@ -42,6 +42,8 @@
 /* Private variables ---------------------------------------------------------*/
 SPI_HandleTypeDef hspi1;
 
+UART_HandleTypeDef huart1;
+
 /* USER CODE BEGIN PV */
 
 static u8g2_t u8g2;
@@ -52,6 +54,7 @@ static u8g2_t u8g2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 uint8_t u8x8_stm32_gpio_and_delay(U8X8_UNUSED u8x8_t *u8x8,
 U8X8_UNUSED uint8_t msg, U8X8_UNUSED uint8_t arg_int,
@@ -105,6 +108,23 @@ void clearOLED(){
   } while( u8g2_NextPage(&u8g2) );
 }
 
+uint16_t RX_DATA[20];
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) 
+{
+  HAL_UART_Receive_IT(&huart1, RX_DATA, 20); 
+}
+
+void constructSkeleton()
+{
+  u8g2_FirstPage(&u8g2);
+
+  do
+  {
+    // TODO add the skeleton of the display
+    // clear the string
+  } while (u8g2_NextPage(&u8g2));
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -126,7 +146,7 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-
+  uint8_t RX_DATA[20];
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -141,7 +161,10 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_SPI1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+
+  HAL_UART_Receive_IT (&huart1, RX_DATA , 20);
 
   u8g2_Setup_sh1107_pimoroni_128x128_1(&u8g2, U8G2_R0, u8x8_byte_4wire_hw_spi,
       u8x8_stm32_gpio_and_delay);
@@ -163,27 +186,20 @@ int main(void)
     u8g2_DrawLine(&u8g2, 20, 0, 20, 20);
     u8g2_DrawCircle(&u8g2,10, 10, 7, U8G2_DRAW_ALL);
     u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
-    u8g2_DrawStr(&u8g2, 2, 60, "Scemo chi legge");
+    u8g2_DrawStr(&u8g2, 20, 55, "Listening to:");
+    u8g2_DrawStr(&u8g2, 2, 70, "Upside Down");
+    u8g2_DrawStr(&u8g2, 50, 80, "by");
+    u8g2_DrawStr(&u8g2, 2, 90, "Mezzosangue");
+    u8g2_DrawLine(&u8g2, 0, 108, 128, 108);
+    u8g2_DrawStr(&u8g2, 2, 122, "1-");
+    u8g2_DrawStr(&u8g2, 14, 122, "56");
+    u8g2_DrawStr(&u8g2, 54, 122, "2-");
+    u8g2_DrawStr(&u8g2, 66, 122, "02");
+    u8g2_DrawStr(&u8g2, 102, 122, "3-");
+    u8g2_DrawStr(&u8g2, 114, 122, "74");
     // clear the string
 		} while (u8g2_NextPage(&u8g2));
 
-    HAL_Delay(1000);
-    u8g2_FirstPage(&u8g2);
-    do {
-		u8g2_SetFont(&u8g2, u8g2_font_ncenB14_tr);
-    u8g2_DrawStr(&u8g2, 50, 18, "00:01");
-    u8g2_DrawLine(&u8g2, 0, 20, 128, 20);
-    u8g2_DrawLine(&u8g2, 20, 0, 20, 20);
-    u8g2_DrawCircle(&u8g2,10, 10, 7, U8G2_DRAW_ALL);
-    u8g2_DrawCircle(&u8g2,10, 10, 1, U8G2_DRAW_ALL);
-    u8g2_DrawCircle(&u8g2,10, 10, 3, U8G2_DRAW_ALL);
-    u8g2_DrawCircle(&u8g2,10, 10, 5, U8G2_DRAW_ALL);
-    u8g2_DrawCircle(&u8g2,10, 10, 6, U8G2_DRAW_ALL);
-    u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
-    u8g2_DrawStr(&u8g2, 2, 60, "MAH");
-    // clear the string
-		} while (u8g2_NextPage(&u8g2));
-    HAL_Delay(1000);
     
 
     /* USER CODE END WHILE */
@@ -269,6 +285,39 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
 
 }
 
