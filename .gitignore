@@ -1,0 +1,22 @@
+# Ignore build output
+build/
+
+# Ignore IDE-specific files
+*.project
+*.cproject
+*.launch
+*.settings/
+
+# Ignore generated files
+*.bin
+*.hex
+*.elf
+
+# Ignore debug files
+*.d
+*.o
+*.su
+
+# Ignore system files
+.DS_Store
+Thumbs.db
