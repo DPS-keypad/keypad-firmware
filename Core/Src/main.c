@@ -40,6 +40,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
 SPI_HandleTypeDef hspi1;
 
 UART_HandleTypeDef huart1;
@@ -47,6 +49,12 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN PV */
 
 static u8g2_t u8g2;
+int AD_RES;
+char display_values1[3];
+char display_values2[3];
+
+uint16_t pot1[20];
+uint16_t pot2[20];
 
 /* USER CODE END PV */
 
@@ -55,6 +63,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 uint8_t u8x8_stm32_gpio_and_delay(U8X8_UNUSED u8x8_t *u8x8,
 U8X8_UNUSED uint8_t msg, U8X8_UNUSED uint8_t arg_int,
@@ -108,6 +117,35 @@ void clearOLED(){
   } while( u8g2_NextPage(&u8g2) );
 }
 
+void ADC_read(void){
+  HAL_ADC_Start(&hadc1); // Start ADC Conversion
+  HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
+      int sum1 = 0;
+      int sum2 = 0;
+  for (int i = 0; i < 10; i++){
+    pot1[i] = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
+    pot2[i] = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
+    sum1 += pot1[i];
+    sum2 += pot2[i];
+  }
+
+  // Calculate the mean values
+  pot1[0] = sum1 / 10;
+  pot2[0] = sum2 / 10;
+
+  // Convert ADC value to 0-100 range
+  float converted_result1 = (pot1[0] * 100) / 64;
+  float converted_result2 = (pot2[0] * 100) / 64;
+
+  display_values1 [0] = (int)converted_result1 / 10 + 48;
+  display_values1 [1] = (int)converted_result1 % 10 + 48;
+  display_values1 [2] = '\0';
+
+  display_values2 [0] = (int)converted_result2 / 10 + 48;
+  display_values2 [1] = (int)converted_result2 % 10 + 48;
+  display_values2 [2] = '\0';
+}
+
 uint16_t RX_DATA[20];
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) 
@@ -146,7 +184,7 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-  uint8_t RX_DATA[20];
+
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -162,6 +200,7 @@ int main(void)
   MX_GPIO_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_UART_Receive_IT (&huart1, RX_DATA , 20);
@@ -176,6 +215,14 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+
+    // converting in % (0-100)
+    //pot1 = (adcRead() * 100) / 255;
+    //pot2 = (adcRead() * 100) / 255;
+
+    // take the first 2 values from potentiometers and convert them to string
+
+  
 
     u8g2_FirstPage(&u8g2);
 		
@@ -192,15 +239,17 @@ int main(void)
     u8g2_DrawStr(&u8g2, 2, 90, "Mezzosangue");
     u8g2_DrawLine(&u8g2, 0, 108, 128, 108);
     u8g2_DrawStr(&u8g2, 2, 122, "1-");
-    u8g2_DrawStr(&u8g2, 14, 122, "56");
+    ADC_read();
+    u8g2_DrawStr(&u8g2, 14, 122, display_values1);
     u8g2_DrawStr(&u8g2, 54, 122, "2-");
-    u8g2_DrawStr(&u8g2, 66, 122, "02");
+    ADC_read();
+    u8g2_DrawStr(&u8g2, 66, 122, display_values2);
     u8g2_DrawStr(&u8g2, 102, 122, "3-");
     u8g2_DrawStr(&u8g2, 114, 122, "74");
     // clear the string
 		} while (u8g2_NextPage(&u8g2));
 
-    
+    HAL_Delay(100);
 
     /* USER CODE END WHILE */
 
@@ -248,6 +297,68 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
+  hadc1.Init.Resolution = ADC_RESOLUTION_6B;
+  hadc1.Init.ScanConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = ENABLE;
+  hadc1.Init.NbrOfDiscConversion = 1;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 2;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = 2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
