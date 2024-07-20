@@ -54,9 +54,9 @@ char display_values1[3];
 char display_values2[3];
 char display_values3[3];
 
-uint16_t pot1[20];
-uint16_t pot2[20];
-uint16_t pot3[20];
+uint16_t pot1;
+uint16_t pot2;
+uint16_t pot3;
 
 char hoursandminutes[6];
 
@@ -144,28 +144,18 @@ void ADC_read(void)
 {
   HAL_ADC_Start(&hadc1);                // Start ADC Conversion
   HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-  int sum1 = 0;
-  int sum2 = 0;
-  int sum3 = 0;
-  for (int i = 0; i < 10; i++)
-  {
-    pot1[i] = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
-    pot2[i] = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
-    pot3[i] = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
-    sum1 += pot1[i];
-    sum2 += pot2[i];
-    sum3 += pot3[i];
-  }
-
-  // Calculate the mean values
-  pot1[0] = sum1 / 10;
-  pot2[0] = sum2 / 10;
-  pot3[0] = sum3 / 10;
+    pot1 = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
+    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
+    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
+    pot2 = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
+    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
+    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
+    pot3 = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
 
   // Convert ADC value to 0-100 range
-  float converted_result1 = (pot1[0] * 100) / 64;
-  float converted_result2 = (pot2[0] * 100) / 64;
-  float converted_result3 = (pot3[0] * 100) / 64;
+  float converted_result1 = (pot1 * 100) / 256;
+  float converted_result2 = (pot2 * 100) / 256;
+  float converted_result3 = (pot3 * 100) / 256;
 
   display_values1[0] = (int)converted_result1 / 10 + 48;
   display_values1[1] = (int)converted_result1 % 10 + 48;
@@ -258,6 +248,7 @@ int main(void)
     // take the first 2 values from potentiometers and convert them to string
 
     u8g2_FirstPage(&u8g2);
+    ADC_read();
 
     do
     {
@@ -274,13 +265,10 @@ int main(void)
       u8g2_DrawStr(&u8g2, 2, 90, "Mezzosangue");
       u8g2_DrawLine(&u8g2, 0, 108, 128, 108);
       u8g2_DrawStr(&u8g2, 2, 122, "1-");
-      ADC_read();
       u8g2_DrawStr(&u8g2, 14, 122, display_values1);
       u8g2_DrawStr(&u8g2, 54, 122, "2-");
-      ADC_read();
       u8g2_DrawStr(&u8g2, 66, 122, display_values2);
       u8g2_DrawStr(&u8g2, 102, 122, "3-");
-      ADC_read();
       u8g2_DrawStr(&u8g2, 114, 122, display_values3);
       // clear the string
     } while (u8g2_NextPage(&u8g2));
@@ -376,7 +364,7 @@ static void MX_ADC1_Init(void)
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
-  hadc1.Init.Resolution = ADC_RESOLUTION_6B;
+  hadc1.Init.Resolution = ADC_RESOLUTION_8B;
   hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = ENABLE;
@@ -396,7 +384,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -415,6 +403,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = 3;
+  sConfig.SamplingTime = ADC_SAMPLETIME_56CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
