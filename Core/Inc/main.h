@@ -63,6 +63,33 @@ void Error_Handler(void);
 #define SPI1_CS_GPIO_Port GPIOA
 #define SPI1_DC_Pin GPIO_PIN_6
 #define SPI1_DC_GPIO_Port GPIOA
+#define BUT9_Pin GPIO_PIN_11
+#define BUT9_GPIO_Port GPIOA
+#define BUT9_EXTI_IRQn EXTI15_10_IRQn
+#define BUT8_Pin GPIO_PIN_12
+#define BUT8_GPIO_Port GPIOA
+#define BUT8_EXTI_IRQn EXTI15_10_IRQn
+#define BUT7_Pin GPIO_PIN_3
+#define BUT7_GPIO_Port GPIOB
+#define BUT7_EXTI_IRQn EXTI3_IRQn
+#define BUT6_Pin GPIO_PIN_4
+#define BUT6_GPIO_Port GPIOB
+#define BUT6_EXTI_IRQn EXTI4_IRQn
+#define BUT5_Pin GPIO_PIN_5
+#define BUT5_GPIO_Port GPIOB
+#define BUT5_EXTI_IRQn EXTI9_5_IRQn
+#define BUT4_Pin GPIO_PIN_6
+#define BUT4_GPIO_Port GPIOB
+#define BUT4_EXTI_IRQn EXTI9_5_IRQn
+#define BUT3_Pin GPIO_PIN_7
+#define BUT3_GPIO_Port GPIOB
+#define BUT3_EXTI_IRQn EXTI9_5_IRQn
+#define BUT2_Pin GPIO_PIN_8
+#define BUT2_GPIO_Port GPIOB
+#define BUT2_EXTI_IRQn EXTI9_5_IRQn
+#define BUT1_Pin GPIO_PIN_9
+#define BUT1_GPIO_Port GPIOB
+#define BUT1_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
 

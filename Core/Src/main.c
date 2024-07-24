@@ -141,21 +141,22 @@ void getHour()
 }
 
 void ADC_read(void)
+
 {
   HAL_ADC_Start(&hadc1);                // Start ADC Conversion
   HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-    pot1 = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
-    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
-    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-    pot2 = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
-    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
-    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-    pot3 = HAL_ADC_GetValue(&hadc1); // Read ADC Conversion Result
+  pot1 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
+  HAL_ADC_Start(&hadc1);                // Start ADC Conversion
+  HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
+  pot2 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
+  HAL_ADC_Start(&hadc1);                // Start ADC Conversion
+  HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
+  pot3 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
 
   // Convert ADC value to 0-100 range
-  float converted_result1 = (pot1 * 100) / 256;
-  float converted_result2 = (pot2 * 100) / 256;
-  float converted_result3 = (pot3 * 100) / 256;
+  float converted_result1 = 99 - ((pot1 * 100) / 256);
+  float converted_result2 = 99 - ((pot2 * 100) / 256);
+  float converted_result3 = 99 - ((pot3 * 100) / 256);
 
   display_values1[0] = (int)converted_result1 / 10 + 48;
   display_values1[1] = (int)converted_result1 % 10 + 48;
@@ -191,7 +192,48 @@ void constructSkeleton()
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  
+  switch (GPIO_Pin)
+  {
+  case BUT1_Pin:
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 1 pressed", 16, 1000);
+    break;
+  case BUT2_Pin:
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 2 pressed", 16, 1000);
+    break;
+  case BUT3_Pin:
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 3 pressed", 16, 1000);
+    break;
+  case BUT4_Pin:
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 4 pressed", 16, 1000);
+    break;
+  case BUT5_Pin:
+    // Code for button 5
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 5 pressed", 16, 1000);
+    break;
+  case BUT6_Pin:
+    // Code for button 6
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 6 pressed", 16, 1000);
+    break;
+  case BUT7_Pin:
+    // Code for button 7
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 7 pressed", 16, 1000);
+    break;
+  case BUT8_Pin:
+    // Code for button 8
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 8 pressed", 16, 1000);
+    break;
+  case BUT9_Pin:
+    // Code for button 9
+    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 9 pressed", 16, 1000);
+    break;
+  default:
+    // Code for other pins
+    break;
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -227,6 +269,8 @@ int main(void)
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
+
+
   HAL_UART_Receive_IT(&huart1, RX_DATA, 20);
 
   u8g2_Setup_sh1107_pimoroni_128x128_1(&u8g2, U8G2_R0, u8x8_byte_4wire_hw_spi,
@@ -240,10 +284,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-    // converting in % (0-100)
-    // pot1 = (adcRead() * 100) / 255;
-    // pot2 = (adcRead() * 100) / 255;
 
     // take the first 2 values from potentiometers and convert them to string
 
@@ -283,14 +323,13 @@ int main(void)
     packet[5] = display_values3[1];
 
     // Sending the whole packet to the serial port
-    HAL_UART_Transmit(&huart1, (uint8_t *)packet, 6, 1000);
+    //HAL_UART_Transmit(&huart1, (uint8_t *)packet, 6, 1000);
 
     // Clearing the packet
     for (int i = 0; i < 6; i++)
     {
       packet[i] = '\0';
     }
-
 
     HAL_Delay(100);
     minutes++;
@@ -498,6 +537,7 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, SPI1_RESET_Pin|SPI1_CS_Pin|SPI1_DC_Pin, GPIO_PIN_RESET);
@@ -508,6 +548,33 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BUT9_Pin BUT8_Pin */
+  GPIO_InitStruct.Pin = BUT9_Pin|BUT8_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : BUT7_Pin BUT6_Pin BUT5_Pin BUT4_Pin
+                           BUT3_Pin BUT2_Pin BUT1_Pin */
+  GPIO_InitStruct.Pin = BUT7_Pin|BUT6_Pin|BUT5_Pin|BUT4_Pin
+                          |BUT3_Pin|BUT2_Pin|BUT1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
