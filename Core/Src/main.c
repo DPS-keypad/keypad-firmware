@@ -329,7 +329,7 @@ void constructSkeleton()
   do
   {
     // Draw the waiting message
-    u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
+    u8g2_SetFont(&u8g2, u8g2_font_t0_11_t_all);
     u8g2_DrawStr(&u8g2, 10, 30, "Waiting for serial");
     u8g2_DrawStr(&u8g2, 10, 50, "connection...");
     u8g2_DrawStr(&u8g2, 10, 70, "Please set the time");
