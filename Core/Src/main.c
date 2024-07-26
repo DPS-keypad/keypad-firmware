@@ -194,45 +194,52 @@ void constructSkeleton()
 /* USER CODE BEGIN 0 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+  static uint32_t last_interrupt_time = 0;
+  uint32_t interrupt_time = HAL_GetTick();
   
+  if (interrupt_time - last_interrupt_time > 200) // Debounce time of 200ms
+  {
   switch (GPIO_Pin)
   {
   case BUT1_Pin:
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 1 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key1\0", 5, 1000);
     break;
   case BUT2_Pin:
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 2 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key2\0", 5, 1000);
     break;
   case BUT3_Pin:
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 3 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key3\0", 5, 1000);
     break;
   case BUT4_Pin:
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 4 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key4\0", 5, 1000);
     break;
   case BUT5_Pin:
     // Code for button 5
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 5 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key5\0", 5, 1000);
     break;
   case BUT6_Pin:
     // Code for button 6
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 6 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key6\0", 5, 1000);
     break;
   case BUT7_Pin:
     // Code for button 7
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 7 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key7\0", 5, 1000);
     break;
   case BUT8_Pin:
     // Code for button 8
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 8 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key8\0", 5, 1000);
     break;
   case BUT9_Pin:
     // Code for button 9
-    HAL_UART_Transmit(&huart1, (uint8_t *)"Button 9 pressed", 16, 1000);
+    HAL_UART_Transmit(&huart1, (uint8_t *)"key9\0", 5, 1000);
     break;
   default:
     // Code for other pins
     break;
   }
+  }
+  
+  last_interrupt_time = interrupt_time;
 }
 /* USER CODE END 0 */
 
@@ -273,7 +280,7 @@ int main(void)
 
   HAL_UART_Receive_IT(&huart1, RX_DATA, 20);
 
-  u8g2_Setup_sh1107_pimoroni_128x128_1(&u8g2, U8G2_R0, u8x8_byte_4wire_hw_spi,
+  u8g2_Setup_sh1107_pimoroni_128x128_1(&u8g2, U8G2_R2, u8x8_byte_4wire_hw_spi,
                                        u8x8_stm32_gpio_and_delay);
   u8g2_InitDisplay(&u8g2);
   u8g2_SetPowerSave(&u8g2, 0);
@@ -360,7 +367,12 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLN = 64;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -370,12 +382,12 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
