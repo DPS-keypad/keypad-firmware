@@ -48,20 +48,42 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
+// OLED display object
 static u8g2_t u8g2;
+
+// ADC result (temporary)
 int AD_RES;
+
+// Display values for potentiometers
 char display_values1[3];
 char display_values2[3];
 char display_values3[3];
 
+// ADC values from potentiometers
 uint16_t pot1;
 uint16_t pot2;
 uint16_t pot3;
 
+// Buffer to store the time in HH:MM format
 char hoursandminutes[6];
 
+// Time variables
 int hours = 0;
 int minutes = 0;
+
+// Packet to send through UART
+char packet[5];
+
+// Song and artist variables
+char song[23];
+char artist[23];
+
+// Default values for song and artist
+char default_song[23] = "No song playing\0";
+char default_artist[23] = "No artist playing\0";
+
+// Buffer to store the received data from UART
+uint8_t RX_DATA[44];
 
 /* USER CODE END PV */
 
@@ -140,8 +162,49 @@ void getHour()
   hoursandminutes[5] = '\0';
 }
 
-void ADC_read(void)
+/**
+ * @brief Updates the hour value.
+ * 
+ * This function is responsible for updating the hour value every minute.
+ * It checks the current time and updates the hour and minute variables accordingly.
+ */
+void updateHour()
+{
+  static uint32_t last_update_time_2 = 0;
+  uint32_t current_time_2 = HAL_GetTick();
 
+  if (current_time_2 - last_update_time_2 >= 60000) // Update every minute
+  {
+    last_update_time_2 = current_time_2;
+
+    if (minutes == 59)
+    {
+      minutes = 0;
+      if (hours == 23)
+      {
+        hours = 0;
+      }
+      else
+      {
+        hours++;
+      }
+    }
+    else
+    {
+      minutes++;
+    }
+  }
+}
+
+/**
+ * @brief Reads the ADC values.
+ * 
+ * This function reads the ADC values from three different channels.
+ * It starts the ADC conversion, polls for the conversion to complete,
+ * and then reads the conversion result. The ADC values are then converted
+ * to a 0-100 range and stored in display_values1, display_values2, and display_values3 arrays.
+ */
+void ADC_read(void)
 {
   HAL_ADC_Start(&hadc1);                // Start ADC Conversion
   HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
@@ -158,6 +221,7 @@ void ADC_read(void)
   float converted_result2 = 99 - ((pot2 * 100) / 256);
   float converted_result3 = 99 - ((pot3 * 100) / 256);
 
+  // Convert the result to a string
   display_values1[0] = (int)converted_result1 / 10 + 48;
   display_values1[1] = (int)converted_result1 % 10 + 48;
   display_values1[2] = '\0';
@@ -171,82 +235,180 @@ void ADC_read(void)
   display_values3[2] = '\0';
 }
 
-uint16_t RX_DATA[20];
-
+/**
+  * @brief  UART receive complete callback function.
+  * @param  huart: Pointer to a UART_HandleTypeDef structure that contains
+  *                the configuration information for the specified UART module.
+  * @retval None
+  */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  HAL_UART_Receive_IT(&huart1, RX_DATA, 20);
+  HAL_UART_Receive_IT(&huart1, RX_DATA, 44);
+
+  // Extract song and artist from RX_DATA
+  strncpy(song, (char *)RX_DATA, 22);
+  strncpy(artist, (char *)RX_DATA + 22, 22);
+
+  // Null-terminate the strings
+  song[22] = '\0';
+  artist[22] = '\0';
+
+  // Clear RX_DATA
+  for (int i = 0; i < 44; i++)
+  {
+    RX_DATA[i] = 0;
+  }
 }
 
+/**
+ * @brief Updates the screen display.
+ * 
+ * This function is responsible for updating the screen display at regular intervals.
+ * It uses the u8g2 library to draw various elements on the screen, such as the current time,
+ * the currently playing song and artist, and some display values.
+ * The screen is updated every 100 milliseconds.
+ */
+void updateScreen()
+{
+  static uint32_t last_update_time_3 = 0;
+  uint32_t current_time_3 = HAL_GetTick();
+
+  if (current_time_3 - last_update_time_3 >= 100)
+  {
+    last_update_time_3 = current_time_3;
+
+    u8g2_FirstPage(&u8g2);
+    do
+    {
+      u8g2_SetFont(&u8g2, u8g2_font_ncenB14_tr);
+      getHour();
+      u8g2_DrawStr(&u8g2, 50, 18, hoursandminutes);
+      u8g2_DrawLine(&u8g2, 0, 20, 128, 20);
+      u8g2_DrawLine(&u8g2, 20, 0, 20, 20);
+      u8g2_DrawCircle(&u8g2, 10, 10, 7, U8G2_DRAW_ALL);
+      u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
+      u8g2_DrawStr(&u8g2, 20, 55, "Listening to:");
+      u8g2_DrawStr(&u8g2, 2, 70, song);
+      u8g2_DrawStr(&u8g2, 50, 80, "by");
+      u8g2_DrawStr(&u8g2, 2, 90, artist);
+      u8g2_DrawLine(&u8g2, 0, 108, 128, 108);
+      u8g2_DrawStr(&u8g2, 2, 122, "1-");
+      u8g2_DrawStr(&u8g2, 14, 122, display_values1);
+      u8g2_DrawStr(&u8g2, 54, 122, "2-");
+      u8g2_DrawStr(&u8g2, 66, 122, display_values2);
+      u8g2_DrawStr(&u8g2, 102, 122, "3-");
+      u8g2_DrawStr(&u8g2, 114, 122, display_values3);
+      // clear the string
+    } while (u8g2_NextPage(&u8g2));
+  }
+}
+
+/**
+ * @brief Constructs the skeleton of the display.
+ * 
+ * This function initializes the display and prints a waiting message on the screen.
+ * It uses the u8g2 library to control the display and draw text.
+ * 
+ * @note This function assumes that the u8g2 library has been properly initialized.
+ */
 void constructSkeleton()
 {
   u8g2_FirstPage(&u8g2);
 
   do
   {
-    // TODO add the skeleton of the display
-    // clear the string
+    // print "waiting for serial on the display"
+
+    u8g2_SetFont(&u8g2, u8g2_font_ncenB14_tr);
+    u8g2_DrawStr(&u8g2, 10, 30, "Waiting for serial");
+    u8g2_DrawStr(&u8g2, 10, 50, "connection...");
+    u8g2_DrawStr(&u8g2, 10, 70, "Please set the time");
+    u8g2_DrawStr(&u8g2, 10, 90, "on your PC");
   } while (u8g2_NextPage(&u8g2));
 }
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/**
+  * @brief  GPIO EXTI callback function.
+  * @param  GPIO_Pin: Specifies the pin connected to the EXTI line.
+  * @retval None
+  */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  static uint32_t last_interrupt_time = 0;
-  uint32_t interrupt_time = HAL_GetTick();
-  
-  if (interrupt_time - last_interrupt_time > 200) // Debounce time of 200ms
+  static uint32_t last_interrupt_time_1 = 0;
+  uint32_t interrupt_time_1 = HAL_GetTick();
+
+  if (interrupt_time_1 - last_interrupt_time_1 > 200) // Debounce time of 200ms
   {
-  switch (GPIO_Pin)
-  {
-  case BUT1_Pin:
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key1\0", 5, 1000);
-    break;
-  case BUT2_Pin:
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key2\0", 5, 1000);
-    break;
-  case BUT3_Pin:
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key3\0", 5, 1000);
-    break;
-  case BUT4_Pin:
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key4\0", 5, 1000);
-    break;
-  case BUT5_Pin:
-    // Code for button 5
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key5\0", 5, 1000);
-    break;
-  case BUT6_Pin:
-    // Code for button 6
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key6\0", 5, 1000);
-    break;
-  case BUT7_Pin:
-    // Code for button 7
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key7\0", 5, 1000);
-    break;
-  case BUT8_Pin:
-    // Code for button 8
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key8\0", 5, 1000);
-    break;
-  case BUT9_Pin:
-    // Code for button 9
-    HAL_UART_Transmit(&huart1, (uint8_t *)"key9\0", 5, 1000);
-    break;
-  default:
-    // Code for other pins
-    break;
+    switch (GPIO_Pin)
+    {
+    case BUT1_Pin:
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key1\0", 5, 1000);
+      break;
+    case BUT2_Pin:
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key2\0", 5, 1000);
+      break;
+    case BUT3_Pin:
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key3\0", 5, 1000);
+      break;
+    case BUT4_Pin:
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key4\0", 5, 1000);
+      break;
+    case BUT5_Pin:
+      // Code for button 5
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key5\0", 5, 1000);
+      break;
+    case BUT6_Pin:
+      // Code for button 6
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key6\0", 5, 1000);
+      break;
+    case BUT7_Pin:
+      // Code for button 7
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key7\0", 5, 1000);
+      break;
+    case BUT8_Pin:
+      // Code for button 8
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key8\0", 5, 1000);
+      break;
+    case BUT9_Pin:
+      // Code for button 9
+      HAL_UART_Transmit(&huart1, (uint8_t *)"key9\0", 5, 1000);
+      break;
+    default:
+      // Code for other pins
+      break;
+    }
   }
-  }
-  
-  last_interrupt_time = interrupt_time;
+
+  last_interrupt_time_1 = interrupt_time_1;
 }
+
+/**
+ * @brief Sends data through UART.
+ * 
+ * This function sends data through UART using the HAL_UART_Transmit function.
+ * It populates the 'packet' array with data from 'pot1', 'pot2', and 'pot3' variables,
+ * and then transmits the packet through UART.
+ */
+void sendThroughUART()
+{
+  packet[0] = 'p';
+  packet[1] = pot1;
+  packet[2] = pot2;
+  packet[3] = pot3;
+  packet[4] = '\0';
+
+  HAL_UART_Transmit(&huart1, (uint8_t *)packet, 5, 1000);
+}
+
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
+ * @brief  The application entry point.
+ * @retval int
+ */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -276,14 +438,12 @@ int main(void)
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
-
-
-  HAL_UART_Receive_IT(&huart1, RX_DATA, 20);
-
   u8g2_Setup_sh1107_pimoroni_128x128_1(&u8g2, U8G2_R2, u8x8_byte_4wire_hw_spi,
                                        u8x8_stm32_gpio_and_delay);
   u8g2_InitDisplay(&u8g2);
   u8g2_SetPowerSave(&u8g2, 0);
+
+  HAL_UART_Receive_IT(&huart1, RX_DATA, 44);
 
   /* USER CODE END 2 */
 
@@ -293,53 +453,26 @@ int main(void)
   {
 
     // take the first 2 values from potentiometers and convert them to string
-
-    u8g2_FirstPage(&u8g2);
     ADC_read();
 
-    do
+    // handle the case when the song and artist are empty
+    if (song[0] == '\0')
     {
-      u8g2_SetFont(&u8g2, u8g2_font_ncenB14_tr);
-      getHour();
-      u8g2_DrawStr(&u8g2, 50, 18, hoursandminutes);
-      u8g2_DrawLine(&u8g2, 0, 20, 128, 20);
-      u8g2_DrawLine(&u8g2, 20, 0, 20, 20);
-      u8g2_DrawCircle(&u8g2, 10, 10, 7, U8G2_DRAW_ALL);
-      u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
-      u8g2_DrawStr(&u8g2, 20, 55, "Listening to:");
-      u8g2_DrawStr(&u8g2, 2, 70, "Upside Down");
-      u8g2_DrawStr(&u8g2, 50, 80, "by");
-      u8g2_DrawStr(&u8g2, 2, 90, "Mezzosangue");
-      u8g2_DrawLine(&u8g2, 0, 108, 128, 108);
-      u8g2_DrawStr(&u8g2, 2, 122, "1-");
-      u8g2_DrawStr(&u8g2, 14, 122, display_values1);
-      u8g2_DrawStr(&u8g2, 54, 122, "2-");
-      u8g2_DrawStr(&u8g2, 66, 122, display_values2);
-      u8g2_DrawStr(&u8g2, 102, 122, "3-");
-      u8g2_DrawStr(&u8g2, 114, 122, display_values3);
-      // clear the string
-    } while (u8g2_NextPage(&u8g2));
-
-    char packet[6];
-    // Constructing the packet with display values
-    packet[0] = display_values1[0];
-    packet[1] = display_values1[1];
-    packet[2] = display_values2[0];
-    packet[3] = display_values2[1];
-    packet[4] = display_values3[0];
-    packet[5] = display_values3[1];
-
-    // Sending the whole packet to the serial port
-    //HAL_UART_Transmit(&huart1, (uint8_t *)packet, 6, 1000);
-
-    // Clearing the packet
-    for (int i = 0; i < 6; i++)
+      strncpy(song, default_song, 23);
+    }
+    if (artist[0] == '\0')
     {
-      packet[i] = '\0';
+      strncpy(artist, default_artist, 23);
     }
 
+    // update the screen
+    updateScreen();
+
+    sendThroughUART();
     HAL_Delay(100);
-    minutes++;
+
+    updateHour();
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -348,22 +481,22 @@ int main(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+ * @brief System Clock Configuration
+ * @retval None
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-  */
+   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+   * in the RCC_OscInitTypeDef structure.
+   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
@@ -379,9 +512,8 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
@@ -394,10 +526,10 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief ADC1 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_ADC1_Init(void)
 {
 
@@ -412,7 +544,7 @@ static void MX_ADC1_Init(void)
   /* USER CODE END ADC1_Init 1 */
 
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
-  */
+   */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
   hadc1.Init.Resolution = ADC_RESOLUTION_8B;
@@ -432,7 +564,7 @@ static void MX_ADC1_Init(void)
   }
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-  */
+   */
   sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;
@@ -442,7 +574,7 @@ static void MX_ADC1_Init(void)
   }
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-  */
+   */
   sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = 2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -451,7 +583,7 @@ static void MX_ADC1_Init(void)
   }
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-  */
+   */
   sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = 3;
   sConfig.SamplingTime = ADC_SAMPLETIME_56CYCLES;
@@ -462,14 +594,13 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
-
 }
 
 /**
-  * @brief SPI1 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief SPI1 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_SPI1_Init(void)
 {
 
@@ -500,14 +631,13 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
-
 }
 
 /**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief USART1 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_USART1_UART_Init(void)
 {
 
@@ -533,44 +663,42 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE BEGIN USART1_Init 2 */
 
   /* USER CODE END USART1_Init 2 */
-
 }
 
 /**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief GPIO Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, SPI1_RESET_Pin|SPI1_CS_Pin|SPI1_DC_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, SPI1_RESET_Pin | SPI1_CS_Pin | SPI1_DC_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : SPI1_RESET_Pin SPI1_CS_Pin SPI1_DC_Pin */
-  GPIO_InitStruct.Pin = SPI1_RESET_Pin|SPI1_CS_Pin|SPI1_DC_Pin;
+  GPIO_InitStruct.Pin = SPI1_RESET_Pin | SPI1_CS_Pin | SPI1_DC_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : BUT9_Pin BUT8_Pin */
-  GPIO_InitStruct.Pin = BUT9_Pin|BUT8_Pin;
+  GPIO_InitStruct.Pin = BUT9_Pin | BUT8_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : BUT7_Pin BUT6_Pin BUT5_Pin BUT4_Pin
                            BUT3_Pin BUT2_Pin BUT1_Pin */
-  GPIO_InitStruct.Pin = BUT7_Pin|BUT6_Pin|BUT5_Pin|BUT4_Pin
-                          |BUT3_Pin|BUT2_Pin|BUT1_Pin;
+  GPIO_InitStruct.Pin = BUT7_Pin | BUT6_Pin | BUT5_Pin | BUT4_Pin | BUT3_Pin | BUT2_Pin | BUT1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -588,8 +716,8 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -597,9 +725,9 @@ static void MX_GPIO_Init(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -611,14 +739,14 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
