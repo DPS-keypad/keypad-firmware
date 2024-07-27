@@ -85,6 +85,9 @@ char default_artist[23] = "No artist playing\0";
 // Buffer to store the received data from UART
 uint8_t RX_DATA[44];
 
+// Last key pressed
+char last_key[2] = " ";
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -220,7 +223,7 @@ void ADC_read(void)
   static uint32_t last_update_time_4 = 0;
   uint32_t current_time_4 = HAL_GetTick();
 
-  if (current_time_4 - last_update_time_4 >= 100)
+  if (current_time_4 - last_update_time_4 >= 100) 
   {
     last_update_time_4 = current_time_4;
 
@@ -251,6 +254,8 @@ void ADC_read(void)
     display_values3[0] = (int)converted_result3 / 10 + 48;  // Convert the result to a string
     display_values3[1] = (int)converted_result3 % 10 + 48;  // Convert the result to a string
     display_values3[2] = '\0';                              // Null-terminate the string
+
+    sendThroughUART();
   }
 }
 /**
@@ -303,8 +308,9 @@ void updateScreen()
       u8g2_DrawStr(&u8g2, 50, 18, hoursandminutes);
       u8g2_DrawLine(&u8g2, 0, 20, 128, 20);
       u8g2_DrawLine(&u8g2, 20, 0, 20, 20);
-      u8g2_DrawCircle(&u8g2, 10, 10, 7, U8G2_DRAW_ALL);
       u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
+      u8g2_DrawCircle(&u8g2, 10, 10, 7, U8G2_DRAW_ALL);
+      u8g2_DrawStr(&u8g2, 8, 13, last_key);
       u8g2_DrawStr(&u8g2, 20, 55, "Listening to:");
       u8g2_DrawStr(&u8g2, 2, 70, song);
       u8g2_DrawStr(&u8g2, 50, 80, "by");
@@ -363,30 +369,39 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     {
     case BUT1_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key1\0", 5, 1000);
+      last_key[0] = '1';
       break;
     case BUT2_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key2\0", 5, 1000);
+      last_key[0] = '2';
       break;
     case BUT3_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key3\0", 5, 1000);
+      last_key[0] = '3';
       break;
     case BUT4_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key4\0", 5, 1000);
+      last_key[0] = '4';
       break;
     case BUT5_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key5\0", 5, 1000);
+      last_key[0] = '5';
       break;
     case BUT6_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key6\0", 5, 1000);
+      last_key[0] = '6';
       break;
     case BUT7_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key7\0", 5, 1000);
+      last_key[0] = '7';
       break;
     case BUT8_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key8\0", 5, 1000);
+      last_key[0] = '8';
       break;
     case BUT9_Pin:
       HAL_UART_Transmit(&huart1, (uint8_t *)"key9\0", 5, 1000);
+      last_key[0] = '9';
       break;
     default:
       break;
@@ -490,8 +505,6 @@ int main(void)
 
     // update the screen
     updateScreen();
-
-    sendThroughUART();
 
     updateHour();
 
