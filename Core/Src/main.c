@@ -217,35 +217,42 @@ void updateHour()
  */
 void ADC_read(void)
 {
-  HAL_ADC_Start(&hadc1);                // Start ADC Conversion
-  HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-  pot1 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
-  HAL_ADC_Start(&hadc1);                // Start ADC Conversion
-  HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-  pot2 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
-  HAL_ADC_Start(&hadc1);                // Start ADC Conversion
-  HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-  pot3 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
+  static uint32_t last_update_time_4 = 0;
+  uint32_t current_time_4 = HAL_GetTick();
 
-  // Convert ADC value to 0-100 range
-  float converted_result1 = 99 - ((pot1 * 100) / 256);
-  float converted_result2 = 99 - ((pot2 * 100) / 256);
-  float converted_result3 = 99 - ((pot3 * 100) / 256);    
+  if (current_time_4 - last_update_time_4 >= 100)
+  {
+    last_update_time_4 = current_time_4;
 
-  // Convert the result to a string
-  display_values1[0] = (int)converted_result1 / 10 + 48;  // Convert the result to a string
-  display_values1[1] = (int)converted_result1 % 10 + 48;  // Convert the result to a string
-  display_values1[2] = '\0';                              // Null-terminate the string        
+    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
+    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
+    pot1 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
+    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
+    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
+    pot2 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
+    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
+    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
+    pot3 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
 
-  display_values2[0] = (int)converted_result2 / 10 + 48;  // Convert the result to a string
-  display_values2[1] = (int)converted_result2 % 10 + 48;  // Convert the result to a string
-  display_values2[2] = '\0';                              // Null-terminate the string
+    // Convert ADC value to 0-100 range
+    float converted_result1 = 99 - ((pot1 * 100) / 256);
+    float converted_result2 = 99 - ((pot2 * 100) / 256);
+    float converted_result3 = 99 - ((pot3 * 100) / 256);
 
-  display_values3[0] = (int)converted_result3 / 10 + 48;  // Convert the result to a string
-  display_values3[1] = (int)converted_result3 % 10 + 48;  // Convert the result to a string
-  display_values3[2] = '\0';                              // Null-terminate the string
+    // Convert the result to a string
+    display_values1[0] = (int)converted_result1 / 10 + 48;  // Convert the result to a string
+    display_values1[1] = (int)converted_result1 % 10 + 48;  // Convert the result to a string
+    display_values1[2] = '\0';                              // Null-terminate the string
+
+    display_values2[0] = (int)converted_result2 / 10 + 48;  // Convert the result to a string
+    display_values2[1] = (int)converted_result2 % 10 + 48;  // Convert the result to a string
+    display_values2[2] = '\0';                              // Null-terminate the string
+
+    display_values3[0] = (int)converted_result3 / 10 + 48;  // Convert the result to a string
+    display_values3[1] = (int)converted_result3 % 10 + 48;  // Convert the result to a string
+    display_values3[2] = '\0';                              // Null-terminate the string
+  }
 }
-
 /**
   * @brief  UART receive complete callback function.
   * @param  huart: Pointer to a UART_HandleTypeDef structure that contains
@@ -485,7 +492,6 @@ int main(void)
     updateScreen();
 
     sendThroughUART();
-    HAL_Delay(100);
 
     updateHour();
 
