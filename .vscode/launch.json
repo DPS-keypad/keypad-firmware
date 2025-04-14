@@ -1,24 +1,28 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "C/C++ Runner: Debug Session",
-      "type": "cppdbg",
-      "request": "launch",
-      "args": [],
-      "stopAtEntry": false,
-      "externalConsole": true,
-      "cwd": "c:/Users/vince/STM32CubeIDE/workspace_1.14.1/DPS/Screen_example/Core/Src",
-      "program": "c:/Users/vince/STM32CubeIDE/workspace_1.14.1/DPS/Screen_example/Core/Src/build/Debug/outDebug",
-      "MIMode": "gdb",
-      "miDebuggerPath": "gdb",
-      "setupCommands": [
+    "version": "0.2.0",
+    "configurations": [
         {
-          "description": "Enable pretty-printing for gdb",
-          "text": "-enable-pretty-printing",
-          "ignoreFailures": true
+            "name": "Debug (OpenOCD)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "openocd",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceRoot}/build/keypad-firmware.elf",
+            "device": "STM32F401CCUx",
+            "configFiles": [
+                "interface/stlink.cfg",
+                "target/stm32f4x.cfg"
+            ],
+            "svdFile": "${workspaceRoot}/STM32F401.svd",
+            "runToEntryPoint": "main",
+            "preLaunchTask": "Build",
+            "showDevDebugOutput": "none",
+            "postLaunchCommands": [
+                "monitor reset halt"
+            ],
+            "openOCDLaunchCommands": [
+                "adapter speed 2000"
+            ]
         }
-      ]
-    }
-  ]
+    ]
 }
