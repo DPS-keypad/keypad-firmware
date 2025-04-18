@@ -30,6 +30,7 @@
 #include <math.h>
 
 #include "u8g2.h"
+#include "time.h"
 
 /* USER CODE END Includes */
 
@@ -53,6 +54,10 @@ ADC_HandleTypeDef hadc1;
 
 SPI_HandleTypeDef hspi1;
 
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
+
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
@@ -72,13 +77,6 @@ char display_values3[3];
 uint16_t pot1;
 uint16_t pot2;
 uint16_t pot3;
-
-// Buffer to store the time in HH:MM format
-char hoursandminutes[6];
-
-// Time variables
-int hours = 0;
-int minutes = 0;
 
 // Packet to send through UART
 char packet[5];
@@ -105,6 +103,9 @@ static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 void sendThroughUART(void);
 
@@ -170,56 +171,14 @@ void setFirstHour()
 {
   // Read the value from the serial
   char serial_value[6];                                               // Buffer to store the serial value
-  HAL_UART_Receive(&huart1, (uint8_t *)serial_value, 6, HAL_MAX_DELAY);
-
-  // Set the hour and minute
-  hours = (serial_value[0] - '0') * 10 + (serial_value[1] - '0');     // Convert the ASCII value to integer
-  minutes = (serial_value[3] - '0') * 10 + (serial_value[4] - '0');   // Convert the ASCII value to integer
-}
-
-void getHour()
-{
-  hoursandminutes[0] = (hours / 10) + 48;
-  hoursandminutes[1] = (hours % 10) + 48;
-  hoursandminutes[2] = ':';
-  hoursandminutes[3] = (minutes / 10) + 48;
-  hoursandminutes[4] = (minutes % 10) + 48;
-  hoursandminutes[5] = '\0';
-}
-
-/**
- * @brief Updates the hour value.
- * 
- * This function is responsible for updating the hour value every minute.
- * It checks the current time and updates the hour and minute variables accordingly.
- */
-void updateHour()
-{
-  static uint32_t last_update_time_2 = 0;
-  uint32_t current_time_2 = HAL_GetTick();
-
-  if (current_time_2 - last_update_time_2 >= 60000) // Update every minute
-  {
-    last_update_time_2 = current_time_2;
-
-    if (minutes == 59)
-    {
-      minutes = 0;
-      if (hours == 23)
-      {
-        hours = 0;
-      }
-      else
-      {
-        hours++;
-      }
-    }
-    else
-    {
-      minutes++;
-    }
+  if (HAL_UART_Receive(&huart1, (uint8_t *)serial_value, 6, HAL_MAX_DELAY) == HAL_OK) {
+    // Set the hour and minute usando il modulo TIME
+    int h = (serial_value[0] - '0') * 10 + (serial_value[1] - '0');     // Convert the ASCII value to integer
+    int m = (serial_value[3] - '0') * 10 + (serial_value[4] - '0');   // Convert the ASCII value to integer
+    TIME_Set(h, m);
   }
 }
+
 
 /**
  * @brief Reads the ADC values.
@@ -315,8 +274,12 @@ void updateScreen()
     do
     {
       u8g2_SetFont(&u8g2, u8g2_font_ncenB14_tr);
-      getHour();
-      u8g2_DrawStr(&u8g2, 50, 18, hoursandminutes);
+      
+      // Ottieni l'ora formattata dal modulo TIME
+      char time_str[6];
+      TIME_GetFormatted(time_str);
+      
+      u8g2_DrawStr(&u8g2, 50, 18, time_str);
       u8g2_DrawLine(&u8g2, 0, 20, 128, 20);
       u8g2_DrawLine(&u8g2, 20, 0, 20, 20);
       u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
@@ -441,6 +404,20 @@ void sendThroughUART()
   HAL_UART_Transmit(&huart1, (uint8_t *)packet, 5, 1000);
 }
 
+/**
+ * @brief Timer period elapsed callback
+ * 
+ * Questa funzione viene chiamata quando scatta un interrupt del timer.
+ * @param htim Puntatore all'handle del timer
+ */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  // Verifica che sia il timer TIM2 (timer dell'orologio)
+  if (htim->Instance == TIM2) {
+    // Aggiorna l'ora utilizzando il modulo TIME
+    TIME_IncrementMinute();
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -475,6 +452,9 @@ int main(void)
   MX_ADC1_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
+  MX_TIM2_Init();
+  MX_TIM3_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
   // Initialize the OLED display
@@ -483,11 +463,17 @@ int main(void)
   u8g2_InitDisplay(&u8g2);
   u8g2_SetPowerSave(&u8g2, 0);
 
+  // Inizializza il modulo di gestione del tempo
+  TIME_Init();
+
   // Construct the skeleton of the display
   constructSkeleton();
-
-  // Get the first hour from the serial
+  
+  // Ottieni l'ora iniziale dalla seriale
   setFirstHour();
+
+  // Avvia il timer in modalità interrupt
+  HAL_TIM_Base_Start_IT(&htim2);
 
   // Send the first packet for handshake
   HAL_UART_Transmit(&huart1, (uint8_t *)"p\0", 2, 1000);
@@ -518,7 +504,8 @@ int main(void)
     // update the screen
     updateScreen();
 
-    updateHour();
+    // Rimuovi la funzione updateHour() perché ora viene gestita dall'interrupt
+    // updateHour();
 
     /* USER CODE END WHILE */
 
@@ -674,6 +661,141 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 16000-1;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 60000-1;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 0;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 65535;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+
+  /* USER CODE END TIM4_Init 2 */
 
 }
 

@@ -40,6 +40,17 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+# Raccolta dei file sorgente dei moduli
+file(GLOB MODULES_SOURCES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/Modules/*.c"
+)
+
+# Debug - Mostra quali moduli sono stati trovati
+message("-- Moduli trovati:")
+foreach(module ${MODULES_SOURCES})
+    message("   - ${module}")
+endforeach()
+
 # Configurazione libreria U8G2
 add_library(u8g2 STATIC)
 
@@ -65,12 +76,15 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    # Aggiungi i moduli all'eseguibile
+    ${MODULES_SOURCES}
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    # Aggiungi la directory dei moduli
+    ${CMAKE_CURRENT_SOURCE_DIR}/Core/Inc/Modules
 
     # Add the HAL include path
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32F4xx_HAL_Driver/Inc
