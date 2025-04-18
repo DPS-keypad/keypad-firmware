@@ -31,6 +31,8 @@
 
 #include "u8g2.h"
 #include "time.h"
+#include "display.h"  // Nuovo include per il modulo display
+#include "serial.h"  // Nuovo include per il modulo seriale
 
 /* USER CODE END Includes */
 
@@ -62,8 +64,11 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-// OLED display object
-static u8g2_t u8g2;
+// Rimuovi la variabile u8g2 (ora gestita nel modulo display)
+// static u8g2_t u8g2;
+
+// Struttura per lo stato del display
+static DISPLAY_State_t display_state;
 
 // ADC result (temporary)
 int AD_RES;
@@ -82,12 +87,12 @@ uint16_t pot3;
 char packet[5];
 
 // Song and artist variables
-char song[23];
-char artist[23];
+char song[SERIAL_SONG_SIZE];
+char artist[SERIAL_ARTIST_SIZE];
 
 // Default values for song and artist
-char default_song[23] = "No song playing\0";
-char default_artist[23] = "No artist playing\0";
+const char default_song[SERIAL_SONG_SIZE] = "No song playing";
+const char default_artist[SERIAL_ARTIST_SIZE] = "No artist playing";
 
 // Buffer to store the received data from UART
 uint8_t RX_DATA[44];
@@ -107,230 +112,76 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
-void sendThroughUART(void);
+// Rimuovi le funzioni spostate nel modulo display:
+// - uint8_t u8x8_stm32_gpio_and_delay(...)
+// - uint8_t u8x8_byte_4wire_hw_spi(...)
+// - void clearOLED()
+// - void constructSkeleton()
+// - void updateScreen()
 
-uint8_t u8x8_stm32_gpio_and_delay(U8X8_UNUSED u8x8_t *u8x8,
-                                  U8X8_UNUSED uint8_t msg, U8X8_UNUSED uint8_t arg_int,
-                                  U8X8_UNUSED void *arg_ptr)
-{
-  switch (msg)
-  {
-  case U8X8_MSG_GPIO_AND_DELAY_INIT:
-    HAL_Delay(1);
-    break;
-  case U8X8_MSG_DELAY_MILLI:
-    HAL_Delay(arg_int);
-    break;
-  case U8X8_MSG_GPIO_DC:
-    HAL_GPIO_WritePin(SPI1_DC_GPIO_Port, SPI1_DC_Pin, arg_int);
-    break;
-  case U8X8_MSG_GPIO_CS:
-    HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, arg_int);
-    break;
-  case U8X8_MSG_GPIO_RESET:
-    HAL_GPIO_WritePin(SPI1_RESET_GPIO_Port, SPI1_RESET_Pin, arg_int);
-    break;
-  }
-  return 1;
-}
+void ADC_read(void);
 
-uint8_t u8x8_byte_4wire_hw_spi(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int,
-                               void *arg_ptr)
-{
-  switch (msg)
-  {
-  case U8X8_MSG_BYTE_SEND:
-    HAL_SPI_Transmit(&hspi1, (uint8_t *)arg_ptr, arg_int, 10000);
-    break;
-  case U8X8_MSG_BYTE_INIT:
-    break;
-  case U8X8_MSG_BYTE_SET_DC:
-    u8x8_gpio_SetDC(u8x8, arg_int);
-    break;
-  case U8X8_MSG_BYTE_START_TRANSFER:
-    u8x8_gpio_SetCS(u8x8, u8x8->display_info->chip_enable_level);
-    break;
-  case U8X8_MSG_BYTE_END_TRANSFER:
-    u8x8_gpio_SetCS(u8x8, u8x8->display_info->chip_disable_level);
-    break;
-  default:
-    return 0;
-  }
-  return 1;
-}
+/* RIMUOVI la funzione sendThroughUART() - ora gestita dal modulo seriale */
 
-void clearOLED()
-{
-  u8g2_FirstPage(&u8g2);
-  do
-  {
-  } while (u8g2_NextPage(&u8g2));
-}
-
-void setFirstHour()
-{
-  // Read the value from the serial
-  char serial_value[6];                                               // Buffer to store the serial value
-  if (HAL_UART_Receive(&huart1, (uint8_t *)serial_value, 6, HAL_MAX_DELAY) == HAL_OK) {
-    // Set the hour and minute usando il modulo TIME
-    int h = (serial_value[0] - '0') * 10 + (serial_value[1] - '0');     // Convert the ASCII value to integer
-    int m = (serial_value[3] - '0') * 10 + (serial_value[4] - '0');   // Convert the ASCII value to integer
-    TIME_Set(h, m);
-  }
-}
-
-
-/**
- * @brief Reads the ADC values.
- * 
- * This function reads the ADC values from three different channels.
- * It starts the ADC conversion, polls for the conversion to complete,
- * and then reads the conversion result. The ADC values are then converted
- * to a 0-100 range and stored in display_values1, display_values2, and display_values3 arrays.
- */
-void ADC_read(void)
-{
-  static uint32_t last_update_time_4 = 0;
-  uint32_t current_time_4 = HAL_GetTick();
-
-  if (current_time_4 - last_update_time_4 >= 100) 
-  {
-    last_update_time_4 = current_time_4;
-
-    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
-    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-    pot1 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
-    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
-    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-    pot2 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
-    HAL_ADC_Start(&hadc1);                // Start ADC Conversion
-    HAL_ADC_PollForConversion(&hadc1, 1); // Poll ADC1 Peripheral & TimeOut = 1mSec
-    pot3 = HAL_ADC_GetValue(&hadc1);      // Read ADC Conversion Result
-
-    // Convert ADC value to 0-100 range
-    float converted_result1 = 99 - ((pot1 * 100) / 256);
-    float converted_result2 = 99 - ((pot2 * 100) / 256);
-    float converted_result3 = 99 - ((pot3 * 100) / 256);
-
-    // Convert the result to a string
-    display_values1[0] = (int)converted_result1 / 10 + 48;  // Convert the result to a string
-    display_values1[1] = (int)converted_result1 % 10 + 48;  // Convert the result to a string
-    display_values1[2] = '\0';                              // Null-terminate the string
-
-    display_values2[0] = (int)converted_result2 / 10 + 48;  // Convert the result to a string
-    display_values2[1] = (int)converted_result2 % 10 + 48;  // Convert the result to a string
-    display_values2[2] = '\0';                              // Null-terminate the string
-
-    display_values3[0] = (int)converted_result3 / 10 + 48;  // Convert the result to a string
-    display_values3[1] = (int)converted_result3 % 10 + 48;  // Convert the result to a string
-    display_values3[2] = '\0';                              // Null-terminate the string
-
-    sendThroughUART();
-  }
-}
-/**
-  * @brief  UART receive complete callback function.
-  * @param  huart: Pointer to a UART_HandleTypeDef structure that contains
-  *                the configuration information for the specified UART module.
-  * @retval None
-  */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-  HAL_UART_Receive_IT(&huart1, RX_DATA, 44);
-
-  // Extract song and artist from RX_DATA
-  strncpy(song, (char *)RX_DATA, 22);
-  strncpy(artist, (char *)RX_DATA + 22, 22);
-
-  // Null-terminate the strings
-  song[22] = '\0';    // Null-terminate the string
-  artist[22] = '\0';  // Null-terminate the string
-
-  // Clear RX_DATA
-  for (int i = 0; i < 44; i++)
-  {
-    RX_DATA[i] = 0;
-  }
-}
-
-/**
- * @brief Updates the screen display.
- * 
- * This function is responsible for updating the screen display at regular intervals.
- * It uses the u8g2 library to draw various elements on the screen, such as the current time,
- * the currently playing song and artist, and some display values.
- * The screen is updated every 100 milliseconds.
- */
-void updateScreen()
-{
-  static uint32_t last_update_time_3 = 0;
-  uint32_t current_time_3 = HAL_GetTick();
-
-  if (current_time_3 - last_update_time_3 >= 100)
-  {
-    last_update_time_3 = current_time_3;
-
-    u8g2_FirstPage(&u8g2);
-    do
-    {
-      u8g2_SetFont(&u8g2, u8g2_font_ncenB14_tr);
-      
-      // Ottieni l'ora formattata dal modulo TIME
-      char time_str[6];
-      TIME_GetFormatted(time_str);
-      
-      u8g2_DrawStr(&u8g2, 50, 18, time_str);
-      u8g2_DrawLine(&u8g2, 0, 20, 128, 20);
-      u8g2_DrawLine(&u8g2, 20, 0, 20, 20);
-      u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
-      u8g2_DrawCircle(&u8g2, 10, 10, 7, U8G2_DRAW_ALL);
-      u8g2_DrawStr(&u8g2, 8, 13, last_key);
-      u8g2_DrawStr(&u8g2, 20, 55, "Listening to:");
-      u8g2_DrawStr(&u8g2, 2, 70, song);
-      u8g2_DrawStr(&u8g2, 50, 80, "by");
-      u8g2_DrawStr(&u8g2, 2, 90, artist);
-      u8g2_DrawLine(&u8g2, 0, 108, 128, 108);
-      u8g2_DrawStr(&u8g2, 2, 122, "1-");
-      u8g2_DrawStr(&u8g2, 14, 122, display_values1);
-      u8g2_DrawStr(&u8g2, 54, 122, "2-");
-      u8g2_DrawStr(&u8g2, 66, 122, display_values2);
-      u8g2_DrawStr(&u8g2, 102, 122, "3-");
-      u8g2_DrawStr(&u8g2, 114, 122, display_values3);
-      // clear the string
-    } while (u8g2_NextPage(&u8g2));
-  }
-}
-
-/**
- * @brief Constructs the skeleton of the display.
- * 
- * This function initializes the display and prints a waiting message on the screen.
- * It uses the u8g2 library to control the display and draw text.
- * 
- * @note This function assumes that the u8g2 library has been properly initialized.
- */
-void constructSkeleton()
-{
-  u8g2_FirstPage(&u8g2);
-
-  do
-  {
-    // Draw the waiting message
-    u8g2_SetFont(&u8g2, u8g2_font_t0_11_t_all);
-    u8g2_DrawStr(&u8g2, 10, 30, "Waiting for serial");
-    u8g2_DrawStr(&u8g2, 10, 50, "connection...");
-    u8g2_DrawStr(&u8g2, 10, 70, "Please set the time");
-    u8g2_DrawStr(&u8g2, 10, 90, "on your PC");
-  } while (u8g2_NextPage(&u8g2));
-}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/**
+ * @brief Callback chiamato quando vengono ricevuti nuovi dati sulla canzone
+ */
+static void OnSongDataReceived(const char* new_song, const char* new_artist)
+{
+    // Copia i dati ricevuti nelle variabili locali
+    strncpy(song, new_song, sizeof(song));
+    strncpy(artist, new_artist, sizeof(artist));
+    
+    // Aggiorna lo stato del display
+    strncpy(display_state.song, song, sizeof(display_state.song));
+    strncpy(display_state.artist, artist, sizeof(display_state.artist));
+    DISPLAY_UpdateState(&display_state);
+}
+
+/**
+ * @brief Callback chiamato quando viene ricevuta l'ora iniziale
+ */
+static void OnInitialTimeReceived(int hours, int minutes)
+{
+    // Imposta l'ora utilizzando il modulo TIME
+    TIME_Set(hours, minutes);
+    
+    // Aggiorna l'ora nel display
+    char time_str[6];
+    TIME_GetFormatted(time_str);
+    strcpy(display_state.time, time_str);
+    DISPLAY_UpdateState(&display_state);
+}
+
+/**
+  * @brief Timer period elapsed callback
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    // Codice per TIM2 e TIM3 invariato
+    if (htim->Instance == TIM2) {
+        TIME_IncrementMinute();
+        
+        // Aggiorna l'ora nella struttura dello stato del display
+        char time_str[6];
+        TIME_GetFormatted(time_str);
+        strcpy(display_state.time, time_str);
+        
+        // Aggiorna lo stato del display
+        DISPLAY_UpdateState(&display_state);
+    }
+    else if (htim->Instance == TIM3) {
+        DISPLAY_TimerHandler();
+    }
+}
+
 /**
   * @brief  GPIO EXTI callback function.
-  * @param  GPIO_Pin: Specifies the pin connected to the EXTI line.
-  * @retval None
   */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -380,44 +231,82 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     default:
       break;
     }
+    
+    // Aggiorna lo stato del display
+    strcpy(display_state.last_key, last_key);
+    DISPLAY_UpdateState(&display_state);
   }
 
   last_interrupt_time_1 = interrupt_time_1;
 }
 
 /**
- * @brief Sends data through UART.
- * 
- * This function sends data through UART using the HAL_UART_Transmit function.
- * It populates the 'packet' array with data from 'pot1', 'pot2', and 'pot3' variables,
- * and then transmits the packet through UART.
- */
-void sendThroughUART()
+  * @brief  UART receive complete callback function.
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  packet[0] = 'p';  // Packet type
-  packet[1] = pot1; // Potentiometer values
-  packet[2] = pot2; // Potentiometer values
-  packet[3] = pot3; // Potentiometer values
-  packet[4] = '\0'; // Null-terminate the string
-
-  // Send the packet through UART
-  HAL_UART_Transmit(&huart1, (uint8_t *)packet, 5, 1000);
+    // Delega la gestione al modulo seriale
+    SERIAL_RxCpltCallback(huart);
 }
 
 /**
- * @brief Timer period elapsed callback
- * 
- * Questa funzione viene chiamata quando scatta un interrupt del timer.
- * @param htim Puntatore all'handle del timer
+ * @brief Reads the ADC values.
  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void ADC_read(void)
 {
-  // Verifica che sia il timer TIM2 (timer dell'orologio)
-  if (htim->Instance == TIM2) {
-    // Aggiorna l'ora utilizzando il modulo TIME
-    TIME_IncrementMinute();
+  static uint32_t last_update_time_4 = 0;
+  uint32_t current_time_4 = HAL_GetTick();
+
+  if (current_time_4 - last_update_time_4 >= 100) 
+  {
+    last_update_time_4 = current_time_4;
+
+    HAL_ADC_Start(&hadc1);                
+    HAL_ADC_PollForConversion(&hadc1, 1); 
+    pot1 = HAL_ADC_GetValue(&hadc1);      
+    HAL_ADC_Start(&hadc1);                
+    HAL_ADC_PollForConversion(&hadc1, 1); 
+    pot2 = HAL_ADC_GetValue(&hadc1);      
+    HAL_ADC_Start(&hadc1);                
+    HAL_ADC_PollForConversion(&hadc1, 1); 
+    pot3 = HAL_ADC_GetValue(&hadc1);      
+
+    // Convert ADC value to 0-100 range
+    float converted_result1 = 99 - ((pot1 * 100) / 256);
+    float converted_result2 = 99 - ((pot2 * 100) / 256);
+    float converted_result3 = 99 - ((pot3 * 100) / 256);
+
+    // Convert the result to a string
+    display_values1[0] = (int)converted_result1 / 10 + 48;  
+    display_values1[1] = (int)converted_result1 % 10 + 48;  
+    display_values1[2] = '\0';                              
+
+    display_values2[0] = (int)converted_result2 / 10 + 48;  
+    display_values2[1] = (int)converted_result2 % 10 + 48;  
+    display_values2[2] = '\0';                              
+
+    display_values3[0] = (int)converted_result3 / 10 + 48;  
+    display_values3[1] = (int)converted_result3 % 10 + 48;  
+    display_values3[2] = '\0';                              
+
+    // Aggiorna lo stato del display
+    strcpy(display_state.pot1_value, display_values1);
+    strcpy(display_state.pot2_value, display_values2);
+    strcpy(display_state.pot3_value, display_values3);
+    DISPLAY_UpdateState(&display_state);
+
+    // Invia i valori dei potenziometri tramite il modulo seriale
+    SERIAL_PotValues_t pot_values = {
+        .pot1 = pot1,
+        .pot2 = pot2,
+        .pot3 = pot3
+    };
+    SERIAL_SendPotValues(&pot_values);
   }
 }
+
+/* La funzione setFirstHour è ora rimossa poiché gestita dal modulo seriale */
+
 /* USER CODE END 0 */
 
 /**
@@ -453,33 +342,42 @@ int main(void)
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_TIM2_Init();
-  MX_TIM3_Init();
+  MX_TIM3_Init();  // Timer per il display
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-
-  // Initialize the OLED display
-  u8g2_Setup_sh1107_pimoroni_128x128_1(&u8g2, U8G2_R2, u8x8_byte_4wire_hw_spi,
-                                       u8x8_stm32_gpio_and_delay);
-  u8g2_InitDisplay(&u8g2);
-  u8g2_SetPowerSave(&u8g2, 0);
 
   // Inizializza il modulo di gestione del tempo
   TIME_Init();
 
-  // Construct the skeleton of the display
-  constructSkeleton();
+  // Inizializza il modulo display (passa TIM3 e SPI1)
+  if (!DISPLAY_Init(&htim3, &hspi1)) {
+    Error_Handler();
+  }
   
-  // Ottieni l'ora iniziale dalla seriale
-  setFirstHour();
+  // Inizializza il modulo seriale
+  if (!SERIAL_Init(&huart1)) {
+    Error_Handler();
+  }
+  
+  // Registra i callback per la ricezione dei dati
+  SERIAL_RegisterSongCallback(OnSongDataReceived);
+  SERIAL_RegisterTimeCallback(OnInitialTimeReceived);
+  
+  // Mostra la schermata di attesa
+  DISPLAY_ShowWaitScreen();
+  
+  // Attendi l'orario iniziale
+  if (!SERIAL_ReceiveInitialTime()) {
+    Error_Handler();
+  }
 
-  // Avvia il timer in modalità interrupt
+  // Avvia il timer per l'orologio
   HAL_TIM_Base_Start_IT(&htim2);
 
-  // Send the first packet for handshake
-  HAL_UART_Transmit(&huart1, (uint8_t *)"p\0", 2, 1000);
-
-  // Start the UART receive interrupt
-  HAL_UART_Receive_IT(&huart1, RX_DATA, 44);
+  // Avvia la ricezione seriale in modalità interrupt
+  if (!SERIAL_StartReceive()) {
+    Error_Handler();
+  }
   
   /* USER CODE END 2 */
 
@@ -494,18 +392,16 @@ int main(void)
     // handle the case when the song and artist are empty
     if (song[0] == '\0')
     {
-      strncpy(song, default_song, 23);
+      strncpy(song, default_song, sizeof(song));
+      strncpy(display_state.song, song, sizeof(display_state.song));
     }
     if (artist[0] == '\0')
     {
-      strncpy(artist, default_artist, 23);
+      strncpy(artist, default_artist, sizeof(artist));
+      strncpy(display_state.artist, artist, sizeof(display_state.artist));
     }
-
-    // update the screen
-    updateScreen();
-
-    // Rimuovi la funzione updateHour() perché ora viene gestita dall'interrupt
-    // updateHour();
+    
+    /* RIMOSSO: updateScreen(); - ora gestito dal modulo display */
 
     /* USER CODE END WHILE */
 
@@ -716,7 +612,6 @@ static void MX_TIM2_Init(void)
   */
 static void MX_TIM3_Init(void)
 {
-
   /* USER CODE BEGIN TIM3_Init 0 */
 
   /* USER CODE END TIM3_Init 0 */
@@ -728,11 +623,11 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler = 16000-1;          /* 16MHz / 16000 = 1kHz */
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 1000-1;              /* 1000ms = 1 secondo */
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
   {
     Error_Handler();
@@ -749,9 +644,11 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM3_Init 2 */
-
+  
+  /* Imposta una priorità bassa per l'interrupt */
+  HAL_NVIC_SetPriority(TIM3_IRQn, 15, 0);
+  
   /* USER CODE END TIM3_Init 2 */
-
 }
 
 /**

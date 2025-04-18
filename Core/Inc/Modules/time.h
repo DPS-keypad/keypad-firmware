@@ -9,36 +9,36 @@
 #include "u8g2.h"
 
 /**
- * @brief Inizializza il modulo di gestione del tempo
- * @return true se l'inizializzazione è avvenuta con successo
+ * @brief Initializes the time management module
+ * @return true if initialization was successful
  */
 bool TIME_Init(void);
 
 /**
- * @brief Imposta l'orario corrente
- * @param hours Ore (0-23)
- * @param minutes Minuti (0-59)
- * @return true se l'orario è stato impostato correttamente
+ * @brief Sets the current time
+ * @param hours Hours (0-23)
+ * @param minutes Minutes (0-59)
+ * @return true if time was set correctly
  */
 bool TIME_Set(int hours, int minutes);
 
 /**
- * @brief Incrementa l'orario di un minuto
- * @return true se l'operazione è avvenuta con successo
+ * @brief Increments time by one minute
+ * @return true if operation was successful
  */
 bool TIME_IncrementMinute(void);
 
 /**
- * @brief Restituisce l'ora corrente come stringa formattata "HH:MM"
- * @param buffer Buffer in cui scrivere la stringa (almeno 6 byte)
- * @return true se l'operazione è avvenuta con successo
+ * @brief Returns current time as formatted string "HH:MM"
+ * @param buffer Buffer where the string will be written (at least 6 bytes)
+ * @return true if operation was successful
  */
 bool TIME_GetFormatted(char* buffer);
 
 /**
- * @brief Ottiene l'ora e i minuti correnti
- * @param hours Puntatore alla variabile in cui memorizzare l'ora
- * @param minutes Puntatore alla variabile in cui memorizzare i minuti
+ * @brief Gets the current hours and minutes
+ * @param hours Pointer to the variable to store hours
+ * @param minutes Pointer to the variable to store minutes
  */
 void TIME_GetCurrent(int* hours, int* minutes);
 
