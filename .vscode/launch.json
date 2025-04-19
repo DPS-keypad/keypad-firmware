@@ -3,26 +3,31 @@
     "configurations": [
         {
             "name": "Debug (OpenOCD)",
-            "type": "cortex-debug",
-            "request": "launch",
-            "servertype": "openocd",
             "cwd": "${workspaceRoot}",
             "executable": "${workspaceRoot}/build/keypad-firmware.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
             "device": "STM32F401CCUx",
             "configFiles": [
                 "interface/stlink.cfg",
                 "target/stm32f4x.cfg"
             ],
-            "svdFile": "${workspaceRoot}/STM32F401.svd",
+            "svdFile": "${workspaceRoot}/.vscode/STM32F401.svd",
+            
             "runToEntryPoint": "main",
-            "preLaunchTask": "Build",
-            "showDevDebugOutput": "none",
             "postLaunchCommands": [
-                "monitor reset halt"
+                "monitor reset halt",
+                "break main",
+                "continue"
             ],
-            "openOCDLaunchCommands": [
-                "adapter speed 2000"
-            ]
+            
+            "preLaunchCommands": [
+                "monitor reset"
+            ],
+            "preLaunchTask": "CMake: build",
+            "showDevDebugOutput": "parsed",
+            "armToolchainPath": "/opt/st/stm32cubeclt_1.18.0/GNU-tools-for-STM32/bin"
         }
     ]
 }

@@ -32,7 +32,8 @@
 #include "u8g2.h"
 #include "time.h"
 #include "display.h"  // Nuovo include per il modulo display
-#include "serial.h"  // Nuovo include per il modulo seriale
+#include "serial_protocol.h"  // Nuovo include
+#include "keypad.h"  // Nuovo include per il modulo keypad
 
 /* USER CODE END Includes */
 
@@ -87,12 +88,12 @@ uint16_t pot3;
 char packet[5];
 
 // Song and artist variables
-char song[SERIAL_SONG_SIZE];
-char artist[SERIAL_ARTIST_SIZE];
+char song[23];
+char artist[23];
 
 // Default values for song and artist
-const char default_song[SERIAL_SONG_SIZE] = "No song playing";
-const char default_artist[SERIAL_ARTIST_SIZE] = "No artist playing";
+const char default_song[23] = "No song playing";
+const char default_artist[23] = "No artist playing";
 
 // Buffer to store the received data from UART
 uint8_t RX_DATA[44];
@@ -129,33 +130,64 @@ void ADC_read(void);
 /* USER CODE BEGIN 0 */
 
 /**
- * @brief Callback chiamato quando vengono ricevuti nuovi dati sulla canzone
+ * @brief Callback per cambiamento stato del keypad
  */
-static void OnSongDataReceived(const char* new_song, const char* new_artist)
-{
-    // Copia i dati ricevuti nelle variabili locali
-    strncpy(song, new_song, sizeof(song));
-    strncpy(artist, new_artist, sizeof(artist));
-    
-    // Aggiorna lo stato del display
-    strncpy(display_state.song, song, sizeof(display_state.song));
-    strncpy(display_state.artist, artist, sizeof(display_state.artist));
+static void OnKeypadStateChanged(const KEYPAD_State_t* state) {
+    /* Aggiorna l'ultimo tasto premuto sul display */
+    display_state.last_key[0] = state->last_key;
+    display_state.last_key[1] = '\0';
     DISPLAY_UpdateState(&display_state);
+    
+    /* Invia la maschera dei tasti tramite protocollo */
+    if (state->state_changed) {
+        PROTO_Message_t msg;
+        /* Aggiungi una funzione per creare messaggi con la maschera di tasti al protocollo */
+        if (PROTO_CreateButtonMaskMsg != NULL && PROTO_CreateButtonMaskMsg(&msg, state->button_mask)) {
+            PROTO_SendMessage(&msg);
+        }
+    }
 }
 
 /**
- * @brief Callback chiamato quando viene ricevuta l'ora iniziale
+ * @brief Callback per la ricezione di messaggi dal protocollo
  */
-static void OnInitialTimeReceived(int hours, int minutes)
-{
-    // Imposta l'ora utilizzando il modulo TIME
-    TIME_Set(hours, minutes);
+static void OnMessageReceived(const PROTO_Message_t* msg) {
+    uint8_t hours, minutes;
     
-    // Aggiorna l'ora nel display
-    char time_str[6];
-    TIME_GetFormatted(time_str);
-    strcpy(display_state.time, time_str);
-    DISPLAY_UpdateState(&display_state);
+    /* Processa il messaggio in base al tipo */
+    switch (msg->type) {
+        case MSG_SONG_INFO:
+            /* Estrai informazioni canzone */
+            if (PROTO_ExtractSongInfo(msg, song, artist)) {
+                /* Aggiorna stato display */
+                strncpy(display_state.song, song, sizeof(display_state.song));
+                strncpy(display_state.artist, artist, sizeof(display_state.artist));
+                DISPLAY_UpdateState(&display_state);
+            }
+            break;
+            
+        case MSG_SET_TIME:
+            /* Estrai informazioni tempo */
+            if (PROTO_ExtractTimeInfo(msg, &hours, &minutes)) {
+                /* Imposta l'ora nel modulo TIME */
+                TIME_Set(hours, minutes);
+                
+                /* Aggiorna lo stato del display */
+                char time_str[6];
+                TIME_GetFormatted(time_str);
+                strncpy(display_state.time, time_str, sizeof(display_state.time));
+                DISPLAY_UpdateState(&display_state);
+            }
+            break;
+            
+        case MSG_ACK:
+            /* Gestione conferma ricezione */
+            break;
+            
+        default:
+            /* Tipo messaggio non gestito */
+            break;
+    }
 }
 
 /**
@@ -163,7 +195,7 @@ static void OnInitialTimeReceived(int hours, int minutes)
   */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-    // Codice per TIM2 e TIM3 invariato
+    // Verifica che sia il timer TIM2 (timer dell'orologio)
     if (htim->Instance == TIM2) {
         TIME_IncrementMinute();
         
@@ -175,137 +207,103 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // Aggiorna lo stato del display
         DISPLAY_UpdateState(&display_state);
     }
+    // Verifica che sia il timer TIM3 (timer del display)
     else if (htim->Instance == TIM3) {
         DISPLAY_TimerHandler();
     }
-}
-
-/**
-  * @brief  GPIO EXTI callback function.
-  */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  static uint32_t last_interrupt_time_1 = 0;
-  uint32_t interrupt_time_1 = HAL_GetTick();
-
-  if (interrupt_time_1 - last_interrupt_time_1 > 200) // Debounce time of 200ms
-  {
-    switch (GPIO_Pin)
-    {
-    case BUT1_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key1\0", 5, 1000);
-      last_key[0] = '1';
-      break;
-    case BUT2_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key2\0", 5, 1000);
-      last_key[0] = '2';
-      break;
-    case BUT3_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key3\0", 5, 1000);
-      last_key[0] = '3';
-      break;
-    case BUT4_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key4\0", 5, 1000);
-      last_key[0] = '4';
-      break;
-    case BUT5_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key5\0", 5, 1000);
-      last_key[0] = '5';
-      break;
-    case BUT6_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key6\0", 5, 1000);
-      last_key[0] = '6';
-      break;
-    case BUT7_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key7\0", 5, 1000);
-      last_key[0] = '7';
-      break;
-    case BUT8_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key8\0", 5, 1000);
-      last_key[0] = '8';
-      break;
-    case BUT9_Pin:
-      HAL_UART_Transmit(&huart1, (uint8_t *)"key9\0", 5, 1000);
-      last_key[0] = '9';
-      break;
-    default:
-      break;
+    // Verifica che sia il timer TIM4 (timer del keypad)
+    else if (htim->Instance == TIM4) {
+        KEYPAD_TimerHandler(htim);
     }
-    
-    // Aggiorna lo stato del display
-    strcpy(display_state.last_key, last_key);
-    DISPLAY_UpdateState(&display_state);
-  }
-
-  last_interrupt_time_1 = interrupt_time_1;
 }
 
 /**
-  * @brief  UART receive complete callback function.
+  * @brief  UART receive complete callback
   */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    // Delega la gestione al modulo seriale
-    SERIAL_RxCpltCallback(huart);
+    // Delega la gestione al modulo protocollo
+    PROTO_RxCpltCallback(huart);
 }
 
 /**
- * @brief Reads the ADC values.
+ * @brief Reads and processes ADC values
  */
 void ADC_read(void)
 {
-  static uint32_t last_update_time_4 = 0;
-  uint32_t current_time_4 = HAL_GetTick();
+    static uint32_t last_update_time = 0;
+    uint32_t current_time = HAL_GetTick();
 
-  if (current_time_4 - last_update_time_4 >= 100) 
-  {
-    last_update_time_4 = current_time_4;
+    if (current_time - last_update_time >= 100) 
+    {
+        last_update_time = current_time;
 
-    HAL_ADC_Start(&hadc1);                
-    HAL_ADC_PollForConversion(&hadc1, 1); 
-    pot1 = HAL_ADC_GetValue(&hadc1);      
-    HAL_ADC_Start(&hadc1);                
-    HAL_ADC_PollForConversion(&hadc1, 1); 
-    pot2 = HAL_ADC_GetValue(&hadc1);      
-    HAL_ADC_Start(&hadc1);                
-    HAL_ADC_PollForConversion(&hadc1, 1); 
-    pot3 = HAL_ADC_GetValue(&hadc1);      
+        // Read ADC values
+        HAL_ADC_Start(&hadc1);                
+        HAL_ADC_PollForConversion(&hadc1, 1); 
+        pot1 = HAL_ADC_GetValue(&hadc1);      
+        HAL_ADC_Start(&hadc1);                
+        HAL_ADC_PollForConversion(&hadc1, 1); 
+        pot2 = HAL_ADC_GetValue(&hadc1);      
+        HAL_ADC_Start(&hadc1);                
+        HAL_ADC_PollForConversion(&hadc1, 1); 
+        pot3 = HAL_ADC_GetValue(&hadc1);      
 
-    // Convert ADC value to 0-100 range
-    float converted_result1 = 99 - ((pot1 * 100) / 256);
-    float converted_result2 = 99 - ((pot2 * 100) / 256);
-    float converted_result3 = 99 - ((pot3 * 100) / 256);
+        // Convert to display values
+        float converted_result1 = 99 - ((pot1 * 100) / 256);
+        float converted_result2 = 99 - ((pot2 * 100) / 256);
+        float converted_result3 = 99 - ((pot3 * 100) / 256);
 
-    // Convert the result to a string
-    display_values1[0] = (int)converted_result1 / 10 + 48;  
-    display_values1[1] = (int)converted_result1 % 10 + 48;  
-    display_values1[2] = '\0';                              
+        // Format as strings
+        display_values1[0] = (int)converted_result1 / 10 + 48;  
+        display_values1[1] = (int)converted_result1 % 10 + 48;  
+        display_values1[2] = '\0';                              
 
-    display_values2[0] = (int)converted_result2 / 10 + 48;  
-    display_values2[1] = (int)converted_result2 % 10 + 48;  
-    display_values2[2] = '\0';                              
+        display_values2[0] = (int)converted_result2 / 10 + 48;  
+        display_values2[1] = (int)converted_result2 % 10 + 48;  
+        display_values2[2] = '\0';                              
 
-    display_values3[0] = (int)converted_result3 / 10 + 48;  
-    display_values3[1] = (int)converted_result3 % 10 + 48;  
-    display_values3[2] = '\0';                              
+        display_values3[0] = (int)converted_result3 / 10 + 48;  
+        display_values3[1] = (int)converted_result3 % 10 + 48;  
+        display_values3[2] = '\0';                              
 
-    // Aggiorna lo stato del display
-    strcpy(display_state.pot1_value, display_values1);
-    strcpy(display_state.pot2_value, display_values2);
-    strcpy(display_state.pot3_value, display_values3);
-    DISPLAY_UpdateState(&display_state);
+        // Update display state
+        strcpy(display_state.pot1_value, display_values1);
+        strcpy(display_state.pot2_value, display_values2);
+        strcpy(display_state.pot3_value, display_values3);
+        DISPLAY_UpdateState(&display_state);
 
-    // Invia i valori dei potenziometri tramite il modulo seriale
-    SERIAL_PotValues_t pot_values = {
-        .pot1 = pot1,
-        .pot2 = pot2,
-        .pot3 = pot3
-    };
-    SERIAL_SendPotValues(&pot_values);
-  }
+        // Send pot values using protocol
+        PROTO_Message_t msg;
+        if (PROTO_CreatePotValuesMsg(&msg, pot1, pot2, pot3)) {
+            PROTO_SendMessage(&msg);
+        }
+    }
 }
 
-/* La funzione setFirstHour è ora rimossa poiché gestita dal modulo seriale */
+/**
+ * @brief Funzione per richiedere l'orario iniziale
+ */
+static bool RequestInitialTime(void) {
+    // Mostra schermata di attesa
+    DISPLAY_ShowWaitScreen();
+    
+    // Crea un messaggio di richiesta orario
+    PROTO_Message_t msg;
+    msg.type = MSG_TIME_REQUEST;
+    msg.length = 0;
+    
+    // Invia la richiesta con timeout
+    uint32_t start_time = HAL_GetTick();
+    do {
+        if (PROTO_SendMessage(&msg)) {
+            return true;
+        }
+        HAL_Delay(100);
+    } while ((HAL_GetTick() - start_time) < 5000); // Riprova per 5 secondi
+    
+    return false;
+}
 
 /* USER CODE END 0 */
 
@@ -343,7 +341,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();  // Timer per il display
-  MX_TIM4_Init();
+  MX_TIM4_Init();  // Timer per il keypad
   /* USER CODE BEGIN 2 */
 
   // Inizializza il modulo di gestione del tempo
@@ -354,30 +352,55 @@ int main(void)
     Error_Handler();
   }
   
-  // Inizializza il modulo seriale
-  if (!SERIAL_Init(&huart1)) {
+  // Inizializza il protocollo di comunicazione
+  if (!PROTO_Init(&huart1)) {
     Error_Handler();
   }
   
-  // Registra i callback per la ricezione dei dati
-  SERIAL_RegisterSongCallback(OnSongDataReceived);
-  SERIAL_RegisterTimeCallback(OnInitialTimeReceived);
-  
-  // Mostra la schermata di attesa
-  DISPLAY_ShowWaitScreen();
-  
-  // Attendi l'orario iniziale
-  if (!SERIAL_ReceiveInitialTime()) {
+  // Inizializza il modulo keypad
+  if (!KEYPAD_Init(&htim4)) {
     Error_Handler();
   }
-
+  
+  // Registra i callback
+  PROTO_RegisterCallback(OnMessageReceived);
+  KEYPAD_RegisterCallback(OnKeypadStateChanged);
+  
+  // Richiedi l'orario iniziale
+  if (!RequestInitialTime()) {
+    // Imposta un orario predefinito in caso di fallimento
+    TIME_Set(12, 0);
+  }
+  
   // Avvia il timer per l'orologio
   HAL_TIM_Base_Start_IT(&htim2);
 
+  // Avvia il timer per il display
+  HAL_TIM_Base_Start_IT(&htim3);
+
+  // Avvia il timer per il keypad
+  HAL_TIM_Base_Start_IT(&htim4);
+
+  
+
   // Avvia la ricezione seriale in modalità interrupt
-  if (!SERIAL_StartReceive()) {
+  if (!PROTO_StartReceive()) {
     Error_Handler();
   }
+  
+  // Inizializza lo stato del display
+  char time_str[6];
+  TIME_GetFormatted(time_str);
+  
+  strcpy(display_state.time, time_str);
+  strcpy(display_state.last_key, " ");
+  strcpy(display_state.song, default_song);
+  strcpy(display_state.artist, default_artist);
+  strcpy(display_state.pot1_value, "00");
+  strcpy(display_state.pot2_value, "00");
+  strcpy(display_state.pot3_value, "00");
+  
+  DISPLAY_UpdateState(&display_state);
   
   /* USER CODE END 2 */
 
@@ -670,11 +693,11 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 0;
+  htim4.Init.Prescaler = 16000-1;       /* 16MHz / 16000 = 1kHz */
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 65535;
+  htim4.Init.Period = 1-1;              /* 1ms */
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
   {
     Error_Handler();
@@ -691,9 +714,11 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM4_Init 2 */
-
+    
+  /* Imposta priorità media per l'interrupt */
+  HAL_NVIC_SetPriority(TIM4_IRQn, 10, 0);
+    
   /* USER CODE END TIM4_Init 2 */
-
 }
 
 /**

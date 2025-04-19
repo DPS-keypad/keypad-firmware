@@ -213,24 +213,44 @@ bool DISPLAY_UpdateState(const DISPLAY_State_t* state)
     return true;
 }
 
-bool DISPLAY_ShowWaitScreen(void)
+/**
+ * @brief Mostra una schermata di attesa
+ * 
+ * Questa funzione visualizza una schermata che indica all'utente
+ * che il dispositivo è in attesa di ricevere dati iniziali.
+ */
+void DISPLAY_ShowWaitScreen(void)
 {
+    /* Check initialization status */
     if (!display_initialized) {
-        return false;
+        return;
     }
     
-    /* Show waiting screen with instructions */
+    /* Update the screen with wait message */
+    static bool dots_visible = true;
+    
     u8g2_FirstPage(&u8g2);
-    do
-    {
-        u8g2_SetFont(&u8g2, u8g2_font_t0_11_t_all);
-        u8g2_DrawStr(&u8g2, 10, 30, "Waiting for serial");
-        u8g2_DrawStr(&u8g2, 10, 50, "connection...");
-        u8g2_DrawStr(&u8g2, 10, 70, "Please set the time");
-        u8g2_DrawStr(&u8g2, 10, 90, "on your PC");
+    do {
+        /* Title (larger font) */
+        u8g2_SetFont(&u8g2, u8g2_font_ncenB14_tr);
+        u8g2_DrawStr(&u8g2, 10, 20, "Keypad FW");
+        
+        /* Divider line */
+        u8g2_DrawLine(&u8g2, 0, 30, 128, 30);
+        
+        /* Wait message */
+        u8g2_SetFont(&u8g2, u8g2_font_t0_12b_tf);
+        u8g2_DrawStr(&u8g2, 5, 55, "In attesa");
+        u8g2_DrawStr(&u8g2, 5, 70, "dell'orario");
+        
+        /* Animated dots */
+        if (dots_visible) {
+            u8g2_DrawStr(&u8g2, 100, 70, "...");
+        }
     } while (u8g2_NextPage(&u8g2));
     
-    return true;
+    /* Toggle dots for animation effect */
+    dots_visible = !dots_visible;
 }
 
 /* Called from timer ISR to refresh display when needed */

@@ -45,12 +45,12 @@ bool DISPLAY_Init(TIM_HandleTypeDef* timer_handle, SPI_HandleTypeDef* spi_handle
 bool DISPLAY_UpdateState(const DISPLAY_State_t* state);
 
 /**
- * @brief Shows the time setup waiting screen
+ * @brief Mostra una schermata di attesa
  * 
- * @return true If operation was successful
- * @return false In case of error
+ * Visualizza una schermata che indica all'utente che il 
+ * dispositivo è in attesa di ricevere dati iniziali.
  */
-bool DISPLAY_ShowWaitScreen(void);
+void DISPLAY_ShowWaitScreen(void);
 
 /**
  * @brief Timer interrupt handler for the display

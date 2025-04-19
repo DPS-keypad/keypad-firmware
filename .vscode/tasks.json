@@ -66,6 +66,63 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "CMake: configure",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-B", "build",
+                "-S", "."
+            ],
+            "group": "build"
+        },
+        {
+            "label": "CMake: build",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--config", "Debug",
+                "-j", "8"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOn": "CMake: configure"
+        },
+        {
+            "label": "CMake: clean",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build",
+                "--target", "clean"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "Flash with OpenOCD",
+            "type": "shell",
+            "command": "openocd",
+            "args": [
+                "-f", "interface/stlink.cfg",
+                "-f", "target/stm32f4x.cfg",
+                "-c", "program build/keypad-firmware.elf verify reset exit"
+            ],
+            "group": "build",
+            "dependsOn": "CMake: build"
+        },
+        {
+            "label": "Reset and Debug",
+            "type": "shell",
+            "command": "${workspaceFolder}/.vscode/launch-with-reset.sh",
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
         }
     ]
 }
